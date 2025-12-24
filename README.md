@@ -1,5 +1,7 @@
 login to azure cli
+
 terraform installed
+
 prepare the value (it get from existing aks metadata)
 - vnet name
 - location
