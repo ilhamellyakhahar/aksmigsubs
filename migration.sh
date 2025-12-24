@@ -1,0 +1,75 @@
+#!/bin/bash
+
+set -e
+error_exit() { echo "Error: $1" >&2; exit 1; }
+
+echo "Please provide the following details for AKS migration:"
+read -p "Enter VNet name: " vnet
+read -p "Enter Location [eastus]: " location
+read -p "Enter Resource Group name: " rg
+read -p "Enter CIDR block [10.0.0.0/16]: " cidr_input
+read -p "Enter Subnet block [10.0.1.0/24]: " subnet_input
+read -p "Enter AKS cluster name: " aks
+read -p "Enter System Node Size [Standard_DS2_v2]: " system_size
+read -p "Enter User Node Size [Standard_DS2_v2]: " user_size
+
+cat > terraform/terraform.tfvars << EOL
+vnet        = "$vnet"
+location    = "$location"
+rg          = "$rg"
+cidr        = ["$cidr_input"]
+subnet      = ["$subnet_input"]
+aks         = "$aks"
+system_size = "$system_size"
+user_size   = "$user_size"
+EOL
+
+echo "Deploying Infrastructure..."
+cd terraform
+terraform init
+terraform apply -auto-approve || error_exit "Terraform Infrastructure apply failed"
+echo "Infrastructure deployed successfully."
+
+echo "Fetching AKS credentials..."
+az aks get-credentials --resource-group "$rg" --name "$aks" --overwrite-existing
+echo "Credentials fetched."
+
+echo "Applying ArgoCD CRDs..."
+kubectl apply -k "https://github.com/argoproj/argo-cd/manifests/crds?ref=v3.2.2"
+echo "ArgoCD CRDs applied."
+
+read -p "Enter current cluster context " kube_context
+read -p "Enter kube config path " kube_config_path
+
+cat > helm/argocd/terraform.tfvars << EOL
+kubeconfig_path = "$kube_config_path"
+kubeconfig_context = "$kube_context"
+EOL
+
+cd helm/argocd
+echo "Deploying ArgoCD..."
+terraform init
+terraform apply -auto-approve || error_exit "Terraform Infrastructure apply failed"
+echo "ArgoCD deployed successfully."
+
+read -p "Enter the source cluster context: " source_context
+
+echo "Exporting ArgoCD configurations from $source_context"
+
+cd ../../..
+
+mkdir argoconfigs
+kubectl get appprojects -n argocd -o yaml --context=$source_context > argoconfigs/projects.yaml
+kubectl get applications -n argocd -o yaml --context=$source_context > argoconfigs/applications.yaml
+kubectl get applicationsets -n argocd -o yaml --context=$source_context > argoconfigs/applicationsets.yaml
+kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=repository -o yaml --context=$source_context > argoconfigs/repositories.yaml
+echo "Export completed successfully."
+
+echo "Importing ArgoCD configurations to $kube_context"
+kubectl apply -f argoconfigs/projects.yaml --context=$kube_context
+kubectl apply -f argoconfigs/applications.yaml --context=$kube_context
+kubectl apply -f argoconfigs/applicationsets.yaml --context=$kube_context
+kubectl apply -f argoconfigs/repositories.yaml --context=$kube_context
+echo "Import completed successfully."
+
+echo "AKS migration and ArgoCD configuration completed."
