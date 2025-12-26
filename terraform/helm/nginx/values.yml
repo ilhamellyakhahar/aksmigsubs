@@ -1,0 +1,29 @@
+controller:
+  allowSnippetAnnotations: true
+  config:
+    annotations-risk-level: Critical
+    enable-access-log: "true"
+    log-format-upstream: $remote_addr "$host" $request_method $uri $status
+  ingressClassByName: true
+  ingressClassResource:
+    controllerValue: k8s.io/ingress-nginx
+    enabled: true
+    name: nginx
+  replicaCount: 3
+  service:
+    externalTrafficPolicy: Local
+  setAsDefaultIngress: true
+  # resources:
+  #   limits:
+  #     cpu: 2000m
+  #     memory: 800Mi
+  #   requests:
+  #     cpu: 300m
+  #     memory: 300Mi
+  # nodeSelector:
+  #   ingress: "true"
+  # tolerations:
+  #   - key: "ingress"
+  #     operator: "Equal"
+  #     value: "true"
+  #     effect: "NoSchedule"
