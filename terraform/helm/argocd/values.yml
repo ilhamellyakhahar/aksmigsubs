@@ -2,16 +2,19 @@ crds:
   install: false
 
 global:
-  domain: argocd.example.com
+  domain: testing.migration.argo.nawnest.my.id
 
 certificate:
   enabled: true
 
 server:
+  extraArgs:
+    - --insecure
   ingress:
     enabled: true
     ingressClassName: nginx
     annotations:
       nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
       nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-development
     tls: true
