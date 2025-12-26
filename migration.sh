@@ -51,6 +51,30 @@ echo "Fetching AKS credentials..."
 az aks get-credentials --resource-group "$RG" --name "$AKS" --overwrite-existing || error_exit "Failed to fetch AKS credentials, please check your Azure CLI login and permissions."
 echo "Credentials fetched."
 
+# Install Nginx Ingress Controller on the new AKS cluster
+echo "Installing Nginx Ingress Controller..."
+cat > helm/nginx-ingress/terraform.tfvars << EOL
+kubeconfig_path = "$KUBE_CONFIG_PATH"
+kubeconfig_context = "$AKS"
+EOL
+cd helm/nginx-ingress
+echo "Deploying Nginx Ingress Controller..."
+terraform init || error_exit "Terraform Initialization failed"
+terraform apply -auto-approve || error_exit "Terraform apply failed"
+echo "Nginx Ingress Controller deployed successfully."
+
+# Install Cert-Manager on the new AKS cluster
+echo "Installing Cert-Manager..."
+cat > helm/cert-manager/terraform.tfvars << EOL
+kubeconfig_path = "$KUBE_CONFIG_PATH"
+kubeconfig_context = "$AKS"
+EOL
+cd ../cert-manager
+echo "Deploying Cert-Manager..."
+terraform init || error_exit "Terraform Initialization failed"
+terraform apply -auto-approve || error_exit "Terraform apply failed"
+echo "Cert-Manager deployed successfully."
+
 # Install ArgoCD on the new AKS cluster
 echo "Installing ArgoCD..."
 echo "Applying ArgoCD CRDs..."
