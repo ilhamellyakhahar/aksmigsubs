@@ -71,28 +71,27 @@ kubectl apply -f argoconfigs/applicationsets.yaml --context=$kube_context
 kubectl apply -f argoconfigs/repositories.yaml --context=$kube_context
 echo "Import completed successfully."
 
-echo "AKS migration and ArgoCD configuration completed."
+old_ip=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$source_context)
+new_ip=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$kube_context)
+
 
 echo "Starting DNS A record update process..."
 echo "Please provide the following details:"
-read -p "Enter Resource Group name: " RESOURCE_GROUP
-read -p "Enter DNS Zone name: " ZONE_NAME
-read -p "Enter Old IP address to be replaced: " OLD_IP
-read -p "Enter New IP address to replace with: " NEW_IP
+read -p "Enter Resource Group name: " dns_rg
+read -p "Enter DNS Zone name: " zone
 
-echo "Searching for A records with IP $OLD_IP ..."
+echo "Searching for A records with IP $old_ip ..."
 
-RECORDS=$(az network dns record-set a list -g "$RESOURCE_GROUP" -z "$ZONE_NAME" --query "[?ARecords[?ipv4Address=='$OLD_IP']].name" -o tsv)
-
-if [ -z "$RECORDS" ]; then
-  echo "No A records found with IP $OLD_IP. Exiting."
+records=$(az network dns record-set a list -g "$dns_rg" -z "$zone" --query "[?ARecords[?ipv4Address=='$old_ip']].name" -o tsv)
+if [ -z "$records" ]; then
+  echo "No A records found with IP $old_ip. Exiting."
   exit 0
 fi
 
-for NAME in $RECORDS; do
-  echo "Updating record: $NAME"
-  az network dns record-set a remove-record -g "$RESOURCE_GROUP" -z "$ZONE_NAME" -n "$NAME" -a "$OLD_IP"
-  az network dns record-set a add-record -g "$RESOURCE_GROUP" -z "$ZONE_NAME" -n "$NAME" -a "$NEW_IP"
+for name in $records; do
+  echo "Updating record: $name"
+  az network dns record-set a remove-record -g "$dns_rg" -z "$zone" -n "$name" -a "$old_ip"
+  az network dns record-set a add-record -g "$dns_rg" -z "$zone" -n "$name" -a "$new_ip"
 done
 
 echo "DNS update completed successfully."
