@@ -74,7 +74,6 @@ echo "Import completed successfully."
 old_ip=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$source_context)
 new_ip=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$kube_context)
 
-
 echo "Starting DNS A record update process..."
 echo "Please provide the following details:"
 read -p "Enter Resource Group name: " dns_rg
