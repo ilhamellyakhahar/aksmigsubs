@@ -1,7 +1,6 @@
 #!/bin/bash
 
-set -e
-error_exit() { echo "Error: $1" >&2; exit 1; }
+set -euo pipefail
 
 echo "Please provide the following details for AKS migration:"
 read -p "Enter VNet name: " vnet
@@ -73,3 +72,27 @@ kubectl apply -f argoconfigs/repositories.yaml --context=$kube_context
 echo "Import completed successfully."
 
 echo "AKS migration and ArgoCD configuration completed."
+
+echo "Starting DNS A record update process..."
+echo "Please provide the following details:"
+read -p "Enter Resource Group name: " RESOURCE_GROUP
+read -p "Enter DNS Zone name: " ZONE_NAME
+read -p "Enter Old IP address to be replaced: " OLD_IP
+read -p "Enter New IP address to replace with: " NEW_IP
+
+echo "Searching for A records with IP $OLD_IP ..."
+
+RECORDS=$(az network dns record-set a list -g "$RESOURCE_GROUP" -z "$ZONE_NAME" --query "[?ARecords[?ipv4Address=='$OLD_IP']].name" -o tsv)
+
+if [ -z "$RECORDS" ]; then
+  echo "No A records found with IP $OLD_IP. Exiting."
+  exit 0
+fi
+
+for NAME in $RECORDS; do
+  echo "Updating record: $NAME"
+  az network dns record-set a remove-record -g "$RESOURCE_GROUP" -z "$ZONE_NAME" -n "$NAME" -a "$OLD_IP"
+  az network dns record-set a add-record -g "$RESOURCE_GROUP" -z "$ZONE_NAME" -n "$NAME" -a "$NEW_IP"
+done
+
+echo "DNS update completed successfully."
