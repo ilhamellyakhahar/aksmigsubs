@@ -12,7 +12,6 @@ This project automates migrating workloads from a source AKS cluster to a new AK
 	- Azure CLI
 	- Terraform
 	- kubectl
-	- sed
 - Existing source AKS kube context available locally
 
 ## Usage
