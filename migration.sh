@@ -16,15 +16,6 @@ else
   error_exit ".env file not found."
 fi
 
-# Validate required variables
-REQUIRED_VARS=(VNET LOCATION RG CIDR SUBNET AKS SYSTEM_SIZE USER_SIZE SOURCE_CONTEXT DNS_RG DNS_ZONE KUBE_CONFIG_PATH)
-for var in "${REQUIRED_VARS[@]}"; do
-  if [ -z "${!var:-}" ]; then
-    error_exit "Environment variable $var is not set. Please check your .env file."
-  fi
-done
-echo "All required environment variables are set."
-
 # Generate Terraform variable files
 echo "Generating Terraform variable files..."
 cat > terraform/terraform.tfvars << EOL
@@ -65,7 +56,10 @@ echo "Nginx Ingress Controller deployed successfully."
 
 # Install Cert-Manager on the new AKS cluster
 echo "Installing Cert-Manager..."
-cat > helm/cert-manager/terraform.tfvars << EOL
+echo "Applying Cert-Manager CRDs..."
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.crds.yaml --context="$AKS" || error_exit "Failed to apply Cert-Manager CRDs."
+echo "Cert-Manager CRDs applied."
+cat > ../cert-manager/terraform.tfvars << EOL
 kubeconfig_path = "$KUBE_CONFIG_PATH"
 kubeconfig_context = "$AKS"
 EOL
@@ -80,11 +74,12 @@ echo "Installing ArgoCD..."
 echo "Applying ArgoCD CRDs..."
 kubectl apply -k "https://github.com/argoproj/argo-cd/manifests/crds?ref=v3.2.2" --context="$AKS" || error_exit "Failed to apply ArgoCD CRDs."
 echo "ArgoCD CRDs applied."
-cat > helm/argocd/terraform.tfvars << EOL
+cat > ../argocd/terraform.tfvars << EOL
 kubeconfig_path = "$KUBE_CONFIG_PATH"
 kubeconfig_context = "$AKS"
 EOL
-cd helm/argocd
+cd ../argocd
+sed -i "s|domain: .*|domain: ${ARGO_DOMAIN}|" values.yml
 echo "Deploying ArgoCD..."
 terraform init || error_exit "Terraform Initialization failed"
 terraform apply -auto-approve || error_exit "Terraform apply failed"
@@ -109,20 +104,20 @@ echo "Import completed successfully."
 
 # Update DNS A records to point to the new AKS ingress IP
 echo "Updating DNS A records to point to the new AKS ingress IP..."
-old_ip=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$SOURCE_CONTEXT)
-new_ip=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$AKS)
+OLD_IP=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$SOURCE_CONTEXT)
+NEW_IP=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$AKS)
 
-echo "Searching for A records with IP $old_ip ..."
-records=$(az network dns record-set a list -g "$DNS_RG" -z "$DNS_ZONE" --query "[?ARecords[?ipv4Address=='$old_ip']].name" -o tsv)
-if [ -z "$records" ]; then
-  echo "No A records found with IP $old_ip. Exiting."
+echo "Searching for A records with IP $OLD_IP ..."
+RECORDS=$(az network dns record-set a list -g "$DNS_RG" -z "$DNS_ZONE" --query "[?ARecords[?ipv4Address=='$OLD_IP']].name" -o tsv)
+if [ -z "$RECORDS" ]; then
+  echo "No A records found with IP $OLD_IP. Exiting."
   exit 0
 fi
-echo "Found records: $records"
-echo "Updating A records from $old_ip to $new_ip ..."
-for name in $records; do
-  echo "Updating record: $name"
-  az network dns record-set a remove-record -g "$DNS_RG" -z "$DNS_ZONE" -n "$name" -a "$old_ip"
-  az network dns record-set a add-record -g "$DNS_RG" -z "$DNS_ZONE" -n "$name" -a "$new_ip"
+echo "Found records: $RECORDS"
+echo "Updating A records from $OLD_IP to $NEW_IP ..."
+for NAME in $RECORDS; do
+  echo "Updating record: $NAME"
+  az network dns record-set a remove-record -g "$DNS_RG" -z "$DNS_ZONE" -n "$NAME" -a "$OLD_IP"
+  az network dns record-set a add-record -g "$DNS_RG" -z "$DNS_ZONE" -n "$NAME" -a "$NEW_IP"
 done
 echo "DNS A records updated."
