@@ -79,7 +79,7 @@ kubeconfig_path = "$KUBE_CONFIG_PATH"
 kubeconfig_context = "$AKS"
 EOL
 cd ../argocd
-sed -i "s|domain: .*|domain: ${ARGO_DOMAIN}|" values.yml
+# sed -i "s|domain: .*|domain: ${ARGO_DOMAIN}|" values.yml
 echo "Deploying ArgoCD..."
 terraform init || error_exit "Terraform Initialization failed"
 terraform apply -auto-approve || error_exit "Terraform apply failed"
