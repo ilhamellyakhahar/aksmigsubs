@@ -112,6 +112,24 @@ kubectl apply -f argoconfigs/applicationsets.yaml --context=$AKS || true
 kubectl apply -f argoconfigs/repositories.yaml --context=$AKS || true
 echo "Import completed successfully."
 
+echo "Get unmanaged objects"
+kubectl get deployments,svc,ingress,configmap,secret -A -o json | jq -r '
+  .items[] | select(
+    (.metadata.namespace | IN("argocd", "cert-manager", "default", "ingress", "kube-node-lease", "kube-public", "kube-system") | not) and
+    (.metadata.labels["app.kubernetes.io/instance"] == null) and
+    (.metadata.annotations["argocd.argoproj.io/tracking-id"] == null) and
+    (.metadata.name != "kube-root-ca.crt") and
+    (.type != "helm.sh/release.v1")
+  ) | [.metadata.namespace, .kind, .metadata.name] | @tsv' | \
+while read -r ns kind name; do
+  echo "---" >> unmanaged.yml
+  kubectl apply view-last-applied "$kind/$name" -n "$ns" >> unmanaged.yml
+done
+echo "Unmanaged objects fetched."
+echo "Applying unmanaged objects to $AKS"
+kubectl apply -f unmanaged.yml --context=$AKS || true
+echo "Unmanaged objects applied successfully."
+
 # Update DNS A records to point to the new AKS ingress IP
 echo "Switching Azure subscription to $DNS_SUBS ..."
 az account set --subscription "$DNS_SUBS" || error_exit "Failed to switch Azure subscription."
