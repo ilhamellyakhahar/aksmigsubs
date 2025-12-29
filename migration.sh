@@ -44,11 +44,11 @@ echo "Credentials fetched."
 
 # Install Nginx Ingress Controller on the new AKS cluster
 echo "Installing Nginx Ingress Controller..."
-cat > helm/nginx-ingress/terraform.tfvars << EOL
+cat > helm/nginx/terraform.tfvars << EOL
 kubeconfig_path = "$KUBE_CONFIG_PATH"
 kubeconfig_context = "$AKS"
 EOL
-cd helm/nginx-ingress
+cd helm/nginx
 echo "Deploying Nginx Ingress Controller..."
 terraform init || error_exit "Terraform Initialization failed"
 terraform apply -auto-approve || error_exit "Terraform apply failed"
@@ -67,6 +67,7 @@ cd ../cert-manager
 echo "Deploying Cert-Manager..."
 terraform init || error_exit "Terraform Initialization failed"
 terraform apply -auto-approve || error_exit "Terraform apply failed"
+kubectl apply -f issuer.yml --context="$AKS" || error_exit "Failed to apply Issuer."
 echo "Cert-Manager deployed successfully."
 
 # Install ArgoCD on the new AKS cluster
@@ -95,17 +96,30 @@ kubectl get applicationsets -n argocd -o yaml --context=$SOURCE_CONTEXT > argoco
 kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=repository -o yaml --context=$SOURCE_CONTEXT > argoconfigs/repositories.yaml
 echo "Export completed successfully."
 
+sed -i '/uid:/d;/resourceVersion:/d;/creationTimestamp:/d;/managedFields:/,/^  [^ ]/d' \
+  argoconfigs/repositories.yaml
+
+kubectl --context=$SOURCE_CONTEXT get ns -o name \
+  | awk -F/ '!/^(namespace\/kube-|namespace\/default)/ {print $2}' \
+  | while read ns; do
+      kubectl --context=$AKS get ns "$ns" >/dev/null 2>&1 || kubectl --context=$AKS create ns "$ns"
+    done
+
 echo "Importing ArgoCD configurations to $AKS"
-kubectl apply -f argoconfigs/projects.yaml --context=$AKS
-kubectl apply -f argoconfigs/applications.yaml --context=$AKS
-kubectl apply -f argoconfigs/applicationsets.yaml --context=$AKS
-kubectl apply -f argoconfigs/repositories.yaml --context=$AKS
+kubectl apply -f argoconfigs/projects.yaml --context=$AKS || true
+kubectl apply -f argoconfigs/applications.yaml  --context=$AKS || true
+kubectl apply -f argoconfigs/applicationsets.yaml --context=$AKS || true
+kubectl apply -f argoconfigs/repositories.yaml --context=$AKS || true
 echo "Import completed successfully."
 
 # Update DNS A records to point to the new AKS ingress IP
+echo "Switching Azure subscription to $DNS_SUBS ..."
+az account set --subscription "$DNS_SUBS" || error_exit "Failed to switch Azure subscription."
+echo "Subscription switched."
+
 echo "Updating DNS A records to point to the new AKS ingress IP..."
-OLD_IP=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$SOURCE_CONTEXT)
-NEW_IP=$(kubectl get svc ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$AKS)
+OLD_IP=$(kubectl get svc nginx-ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$SOURCE_CONTEXT)
+NEW_IP=$(kubectl get svc nginx-ingress-nginx-controller -n ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' --context=$AKS)
 
 echo "Searching for A records with IP $OLD_IP ..."
 RECORDS=$(az network dns record-set a list -g "$DNS_RG" -z "$DNS_ZONE" --query "[?ARecords[?ipv4Address=='$OLD_IP']].name" -o tsv)
