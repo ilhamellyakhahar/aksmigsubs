@@ -4,6 +4,7 @@ This project automates migrating workloads from a source AKS cluster to a new AK
 - Provisioning AKS and networking via Terraform
 - Installing NGINX Ingress and Cert-Manager
 - Installing ArgoCD and migrating ArgoCD projects, applications, applicationsets, and repository secrets
+- Fetching unmanaged objects and apply it
 - Updating public DNS A records to the new ingress IP
 
 ## Prerequisites
