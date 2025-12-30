@@ -22,16 +22,11 @@ Run in WSL or a Linux shell for best compatibility.
 
 ```bash
 # 1) Log in to Azure
-az login
-az account set --subscription "<subscription>"
 
 # 2) Verify tools
-az version
-terraform version
-kubectl version --client
 
 # 3) Prepare .env in the repo root (see example above)
 
-# 4) Run the migration
-./migration.sh
+# 4) Run the migration.sh
+
 ```
