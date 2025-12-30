@@ -18,8 +18,6 @@ This project automates migrating workloads from a source AKS cluster to a new AK
 - Existing source AKS kube context available locally and running
 
 ## Usage
-Run in WSL or a Linux shell for best compatibility.
-
 ```bash
 # 1) Log in to Azure
 
@@ -30,3 +28,4 @@ Run in WSL or a Linux shell for best compatibility.
 # 4) Run the migration.sh
 
 ```
+
