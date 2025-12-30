@@ -12,5 +12,3 @@ resource "helm_release" "argocd" {
 }
 
 # kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
-# jveHJUAijeiW26u4
-# bVd2kZMESuUEuWV4

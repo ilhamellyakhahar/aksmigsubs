@@ -112,8 +112,10 @@ kubectl apply -f argoconfigs/applicationsets.yaml --context=$AKS || true
 kubectl apply -f argoconfigs/repositories.yaml --context=$AKS || true
 echo "Import completed successfully."
 
+# Migrate unmanaged Kubernetes objects from source to new AKS cluster
+echo "Migrating unmanaged Kubernetes objects from $SOURCE_CONTEXT to $AKS"
 echo "Get unmanaged objects"
-kubectl get deployments,svc,ingress,configmap,secret -A -o json | jq -r '
+kubectl --context=$SOURCE_CONTEXT get deployments,svc,ingress,configmap,secret -A -o json | jq -r '
   .items[] | select(
     (.metadata.namespace | IN("argocd", "cert-manager", "default", "ingress", "kube-node-lease", "kube-public", "kube-system") | not) and
     (.metadata.labels["app.kubernetes.io/instance"] == null) and
@@ -153,3 +155,11 @@ for NAME in $RECORDS; do
   az network dns record-set a add-record -g "$DNS_RG" -z "$DNS_ZONE" -n "$NAME" -a "$NEW_IP"
 done
 echo "DNS A records updated."
+
+echo "Refreshing ingress.."
+kubectl delete ingress -A --all --context=$AKS || true
+kubectl apply -f terraform/helm/argocd/ingress.yml --context=$AKS || error_exit "Failed to apply ArgoCD Ingress."
+kubectl apply -f unmanaged.yml --context=$AKS || error_exit "Failed to re-apply unmanaged objects."
+echo "Ingress refreshed."
+
+echo "Migration completed successfully."
