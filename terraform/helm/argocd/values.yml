@@ -2,7 +2,7 @@ crds:
   install: false
 
 global:
-  domain: testing.migration.argo.nawnest.my.id
+  domain: argocd.demo.nawatech.co
 
 certificate:
   enabled: true

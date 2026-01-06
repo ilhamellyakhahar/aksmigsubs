@@ -11,10 +11,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - testing.migration.argo.nawnest.my.id
+        - argocd.demo.nawatech.co
       secretName: argocd-ingress-tls
   rules:
-    - host: testing.migration.argo.nawnest.my.id
+    - host: argocd.demo.nawatech.co
       http:
         paths:
           - path: /

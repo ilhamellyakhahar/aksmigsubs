@@ -28,9 +28,13 @@ resource "azurerm_kubernetes_cluster" "aks" {
     name       = "agentpool"
     vm_size    = var.system_size
     vnet_subnet_id = local.aks_subnet_id
+    os_disk_type = "Ephemeral"
+    os_disk_size_gb = 75
     auto_scaling_enabled = true
     min_count  = 1
     max_count  = 2
+    node_count = 1
+    max_pods   = 200
   }
 
   network_profile {
@@ -44,7 +48,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "nodepool" {
   name                  = "userpool"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
   vm_size               = var.user_size
+  os_disk_type         = "Ephemeral"
+  os_disk_size_gb      = 150
   auto_scaling_enabled   = true
+  node_count            = 2
   min_count             = 2
   max_count             = 4
   max_pods              = 200

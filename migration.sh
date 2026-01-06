@@ -86,7 +86,7 @@ terraform init || error_exit "Terraform Initialization failed"
 terraform apply -auto-approve || error_exit "Terraform apply failed"
 echo "ArgoCD deployed successfully."
 
-# Migrate ArgoCD configurations from source to new AKS cluster
+Migrate ArgoCD configurations from source to new AKS cluster
 echo "Exporting ArgoCD configurations from $SOURCE_CONTEXT"
 cd ../../..
 mkdir argoconfigs
@@ -112,12 +112,23 @@ kubectl apply -f argoconfigs/applicationsets.yaml --context=$AKS || true
 kubectl apply -f argoconfigs/repositories.yaml --context=$AKS || true
 echo "Import completed successfully."
 
+# 1. Get all namespaces and loop through them
+for ns in $(kubectl get namespaces --context=$AKS -o jsonpath='{.items[*].metadata.name}'); do
+  # 2. Apply the secret to each namespace
+  kubectl create secret docker-registry acrsecret \
+    --docker-server=$ACR_SERVER \
+    --docker-username=$ACR_USER \
+    --docker-password=$ACR_PASS \
+    --namespace=$ns \
+    --dry-run=client -o yaml | kubectl apply -f - --context=$AKS
+done
+
 # Migrate unmanaged Kubernetes objects from source to new AKS cluster
 echo "Migrating unmanaged Kubernetes objects from $SOURCE_CONTEXT to $AKS"
 echo "Get unmanaged objects"
 kubectl --context=$SOURCE_CONTEXT get deployments,svc,ingress,configmap,secret -A -o json | jq -r '
   .items[] | select(
-    (.metadata.namespace | IN("argocd", "cert-manager", "default", "ingress", "kube-node-lease", "kube-public", "kube-system") | not) and
+    (.metadata.namespace | IN("argocd", "cert-manager", "default", "ingress", "kube-node-lease", "kube-public", "kube-system", "rabbitmq-system", "traefik", "monitoring", "portainer", "rabbitmq") | not) and
     (.metadata.labels["app.kubernetes.io/instance"] == null) and
     (.metadata.annotations["argocd.argoproj.io/tracking-id"] == null) and
     (.metadata.name != "kube-root-ca.crt") and
