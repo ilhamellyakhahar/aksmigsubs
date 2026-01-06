@@ -26,9 +26,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   default_node_pool {
     name       = "agentpool"
-    node_count = 1
     vm_size    = var.system_size
     vnet_subnet_id = local.aks_subnet_id
+    auto_scaling_enabled = true
+    min_count  = 1
+    max_count  = 2
   }
 
   network_profile {
@@ -43,8 +45,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "nodepool" {
   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
   vm_size               = var.user_size
   auto_scaling_enabled   = true
-  min_count             = 1
-  max_count             = 5
+  min_count             = 2
+  max_count             = 4
   max_pods              = 200
   vnet_subnet_id        = local.aks_subnet_id
 }
